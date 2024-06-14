@@ -55,8 +55,8 @@ bool Logger::init(const char* fileName, bool cutLongLine, int64_t rollSize)
 	if (!createDir("/Log")) return false;
 #endif // _WIN32	
 
-	// 创建线程日志
-	m_WriteThread.reset(new std::thread(writeThreadProc));
+	// 创建新线程写日志
+	m_WriteThread.reset(new std::thread(writeThreadProc)); 
 
 	return true;
 }
@@ -414,8 +414,10 @@ bool Logger::createFile(const char* fileName)
 bool Logger::writeToFile(const std::string& data)
 {
 	std::lock_guard<std::mutex> lock(m_WriteMtx); 
-	if (!m_LogFile || !m_LogFile->is_open())
-		return false;
+	if (!m_LogFile || !m_LogFile->is_open()) {
+		std::cerr << "File stream in a bad state." << std::endl;
+		return false; // 文件流不存在或未打开报错
+	}
 
 	const std::string temp(data);
 	m_LogFile->write(temp.c_str(), temp.size());
@@ -423,6 +425,7 @@ bool Logger::writeToFile(const std::string& data)
 		std::cerr << "Log stream is in a bad state." << std::endl;
 		return false;
 	}
+
 	m_LogFile->flush();
 	return true;
 }
@@ -484,11 +487,10 @@ void Logger::writeThreadProc()
 	
 	while (true) {
 		if (!m_FileName.empty()) {
+			// 首次启动或文件大小超过m_FileRollSize，新建文件
 			if (m_LogFile == nullptr || m_WrittenSize >= m_FileRollSize) {
-				// 重置m_WrittenSize
-				m_WrittenSize = 0;
+				m_WrittenSize = 0; // 重置m_WrittenSize
 
-				// 第一次或文件大小超过m_FileRollSize，新建文件
 				std::string strNewFileName(m_FileName);
 				if (!createFile(strNewFileName.c_str())) return;
 			}
